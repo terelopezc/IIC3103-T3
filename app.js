@@ -7,7 +7,12 @@ const port = process.env.PORT || 3001;
 app.use(express.json());
 
 let cantidadOperaciones = 0;
+let cantidadOperaciones2200 = 0;
+let cantidadOperaciones2400 = 0;
+let montoOperaciones2200 = 0;
+let montoOperaciones2400 = 0;
 const mensajes = [];
+const bancos = {};
 
 function decodificarMensaje(base64) {
   const decodedData = Buffer.from(base64, 'base64').toString('utf-8');
@@ -30,9 +35,8 @@ function decodificarMensaje(base64) {
   };
 }
 
-// Función para guardar un mensaje decodificado en el archivo app.txt
 function guardarMensajeEnArchivo(mensaje) {
-  const data = `${mensaje.tipoOperacion},${mensaje.idMensaje},${mensaje.bancoOrigen},${mensaje.cuentaOrigen},${mensaje.bancoDestino},${mensaje.cuentaDestino},${mensaje.monto}\n`;
+  const data = `${mensaje.tipoOperacion},${mensaje.idMensaje},${mensaje.bancoOrigen},${mensaje.cuentaOrigen},${mensaje.bancoDestino},${mensaje.cuentaDestino},${mensaje.monto},${mensaje.publish_time}\n`;
 
   fs.appendFile('app.txt', data, (error) => {
     if (error) {
@@ -41,23 +45,44 @@ function guardarMensajeEnArchivo(mensaje) {
       console.log('Mensaje guardado exitosamente');
     }
   });
+
+  if (mensajes.length > 100) {
+    mensajes.shift();
+  }
+
+  if (mensaje.tipoOperacion === "2200") {
+    cantidadOperaciones2200++;
+    montoOperaciones2200 += Number(mensaje.monto);
+    actualizarCuadraturaBancos(mensaje.bancoOrigen, -Number(mensaje.monto));
+    actualizarCuadraturaBancos(mensaje.bancoDestino, Number(mensaje.monto));
+  } else if (mensaje.tipoOperacion === "2400") {
+    cantidadOperaciones2400++;
+    montoOperaciones2400 += Number(mensaje.monto);
+    actualizarCuadraturaBancos(mensaje.bancoOrigen, Number(mensaje.monto));
+    actualizarCuadraturaBancos(mensaje.bancoDestino, -Number(mensaje.monto));
+  }
 }
 
-// Ruta POST para recibir los mensajes de Pub/Sub
+function actualizarCuadraturaBancos(banco, monto) {
+  if (bancos[banco]) {
+    bancos[banco] += monto;
+  } else {
+    bancos[banco] = monto;
+  }
+}
+
 app.post("/", (req, res) => {
   const message = req.body.message;
-  // Aquí puedes realizar acciones basadas en el mensaje recibido
   console.log("Mensaje recibido:", message);
   cantidadOperaciones++;
   const decodedMessage = decodificarMensaje(message.data);
+  decodedMessage.publish_time = message.publish_time;
 
-  // Verificar si el mensaje ya existe en el archivo
   fs.readFile('app.txt', 'utf8', (error, data) => {
     if (error) {
       console.error('Error al leer el archivo:', error);
     } else {
       if (!data.includes(decodedMessage.idMensaje)) {
-        // El mensaje no existe en el archivo, guardarlo
         guardarMensajeEnArchivo(decodedMessage);
       } else {
         console.log('Mensaje duplicado, no se guarda');
@@ -69,10 +94,15 @@ app.post("/", (req, res) => {
   res.status(200).send("Mensaje recibido");
 });
 
-// Ruta GET para mostrar la página HTML con la tabla de mensajes
 app.get("/", (req, res) => {
   let tableRows = '';
-  for (const mensaje of mensajes) {
+  let publishTimeRows = '';
+  let montoOperacionesData = [];
+
+  for (let i = mensajes.length - 1; i >= 0; i--) {
+    const mensaje = mensajes[i];
+    const fechaTransaccion = mensaje.publish_time.substring(0, 10);
+    const horaTransaccion = mensaje.publish_time.substring(11, 19);
     tableRows += `
       <tr>
         <td>${mensaje.tipoOperacion}</td>
@@ -82,6 +112,23 @@ app.get("/", (req, res) => {
         <td>${mensaje.bancoDestino}</td>
         <td>${mensaje.cuentaDestino}</td>
         <td>${mensaje.monto}</td>
+        <td>${fechaTransaccion}</td>
+        <td>${horaTransaccion}</td>
+      </tr>
+    `;
+    publishTimeRows += `
+      <tr>
+        <td>${mensaje.publish_time}</td>
+      </tr>
+    `;
+    montoOperacionesData.push(Number(mensaje.monto));
+  }
+  let cuadraturaBancosRows = '';
+  for (const banco in bancos) {
+    cuadraturaBancosRows += `
+      <tr>
+        <td>${banco}</td>
+        <td>${bancos[banco]}</td>
       </tr>
     `;
   }
@@ -92,6 +139,8 @@ app.get("/", (req, res) => {
       <head>
         <title>Transacciones TereBank</title>
         <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@3.5.1/dist/chart.min.js"></script>
+ 
         <script>
           setTimeout(() => {
             confetti({
@@ -113,7 +162,7 @@ app.get("/", (req, res) => {
           html {
             font-family: neo-sans;
             font-weight: 700;
-            font-size: 12px; /* Tamaño de fuente ajustado */
+            font-size: 12px;
           }
           body {
             background: white;
@@ -125,58 +174,100 @@ app.get("/", (req, res) => {
             padding: 1em;
             margin: 1em;
           }
-          /* Estilos de la tabla */
           table {
             border-collapse: collapse;
             width: 100%;
-            font-size: 12px; /* Tamaño de fuente ajustado */
+            font-size: 12px;
             text-align: left;
           }
-
           th, td {
             padding: 8px;
             vertical-align: top;
           }
-
           th {
             background-color: #f2f2f2;
           }
         </style>
         <script>
-          // Función para actualizar el contador de transacciones
           function actualizarContador() {
             const contadorElemento = document.getElementById("contador");
             contadorElemento.textContent = ${cantidadOperaciones};
+
+            const contador2200Elemento = document.getElementById("contador2200");
+            contador2200Elemento.textContent = ${cantidadOperaciones2200};
+
+            const contador2400Elemento = document.getElementById("contador2400");
+            contador2400Elemento.textContent = ${cantidadOperaciones2400};
+
+            const montoOperaciones2200Elemento = document.getElementById("montoOperaciones2200");
+            montoOperaciones2200Elemento.textContent = ${calcularMontoOperaciones("2200")};
+
+            const montoOperaciones2400Elemento = document.getElementById("montoOperaciones2400");
+            montoOperaciones2400Elemento.textContent = ${calcularMontoOperaciones("2400")};
+          }
+          setInterval(actualizarContador, 1000);
           }
 
-          // Actualizar el contador al cargar la página
-          window.addEventListener("DOMContentLoaded", () => {
-            actualizarContador();
-          });
         </script>
       </head>
       <body>
         <section>
           <h1>Transacciones TereBank</h1>
-          <p>Transacciones realizadas: <span id="contador"></span></p>
+          <section>
+            <h2>Contadores</h2>
+            <p>Total de operaciones recibidas: <span id="contador">${cantidadOperaciones}</span></p>
+            <p>Total de operaciones tipo 2200: <span id="contador2200">${cantidadOperaciones2200}</span></p>
+            <p>Total de operaciones tipo 2400: <span id="contador2400">${cantidadOperaciones2400}</span></p>
+            <p>Monto operaciones tipo 2200: $<span id="montoOperaciones2200">${calcularMontoOperaciones("2200")}</span></p>
+            <p>Monto operaciones tipo 2400: $<span id="montoOperaciones2400">${calcularMontoOperaciones("2400")}</span></p>
+          </section>
           <table>
             <tr>
-              <th>Tipo de Operación</th>
-              <th>ID de Mensaje</th>
-              <th>Banco de Origen</th>
-              <th>Cuenta de Origen</th>
-              <th>Banco de Destino</th>
-              <th>Cuenta de Destino</th>
+              <th>Tipo Operación</th>
+              <th>ID Mensaje</th>
+              <th>Banco Origen</th>
+              <th>Cuenta Origen</th>
+              <th>Banco Destino</th>
+              <th>Cuenta Destino</th>
               <th>Monto</th>
+              <th>Fecha Transacción</th>
+              <th>Hora Transacción</th>
             </tr>
             ${tableRows}
           </table>
         </section>
-      </body>
+        <section>
+          <h2>Cuadratura Bancos</h2>
+          <table>
+            <tr>
+              <th>Banco</th>
+              <th>Monto</th>
+            </tr>
+            ${cuadraturaBancosRows}
+          </table>
+          <section>
+          <section>
+          <h2>Histograma de Montos</h2>
+          <canvas id="histograma"></canvas>
+        </section>
+
+        </section>
     </html>
   `;
 
-  res.type('html').send(html);
+  res.send(html);
 });
 
-app.listen(port, () => console.log(`La aplicación está escuchando en el puerto ${port}!`));
+function calcularMontoOperaciones(tipoOperacion) {
+  if (tipoOperacion === "2200") {
+    return montoOperaciones2200.toFixed(2);
+  } else if (tipoOperacion === "2400") {
+    return montoOperaciones2400.toFixed(2);
+  } else {
+    return 0;
+  }
+}
+
+app.listen(port, () => {
+  console.log(`Servidor iniciado en el puerto ${port}`);
+});
