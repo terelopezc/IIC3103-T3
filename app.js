@@ -1,4 +1,5 @@
 const express = require("express");
+const fs = require("fs");
 const app = express();
 const port = process.env.PORT || 3001;
 
@@ -29,6 +30,19 @@ function decodificarMensaje(base64) {
   };
 }
 
+// Función para guardar un mensaje decodificado en el archivo app.txt
+function guardarMensajeEnArchivo(mensaje) {
+  const data = `${mensaje.tipoOperacion},${mensaje.idMensaje},${mensaje.bancoOrigen},${mensaje.cuentaOrigen},${mensaje.bancoDestino},${mensaje.cuentaDestino},${mensaje.monto}\n`;
+
+  fs.appendFile('app.txt', data, (error) => {
+    if (error) {
+      console.error('Error al guardar el mensaje en el archivo:', error);
+    } else {
+      console.log('Mensaje guardado exitosamente');
+    }
+  });
+}
+
 // Ruta POST para recibir los mensajes de Pub/Sub
 app.post("/", (req, res) => {
   const message = req.body.message;
@@ -36,6 +50,21 @@ app.post("/", (req, res) => {
   console.log("Mensaje recibido:", message);
   cantidadOperaciones++;
   const decodedMessage = decodificarMensaje(message.data);
+
+  // Verificar si el mensaje ya existe en el archivo
+  fs.readFile('app.txt', 'utf8', (error, data) => {
+    if (error) {
+      console.error('Error al leer el archivo:', error);
+    } else {
+      if (!data.includes(decodedMessage.idMensaje)) {
+        // El mensaje no existe en el archivo, guardarlo
+        guardarMensajeEnArchivo(decodedMessage);
+      } else {
+        console.log('Mensaje duplicado, no se guarda');
+      }
+    }
+  });
+
   mensajes.push(decodedMessage);
   res.status(200).send("Mensaje recibido");
 });
@@ -113,10 +142,23 @@ app.get("/", (req, res) => {
             background-color: #f2f2f2;
           }
         </style>
+        <script>
+          // Función para actualizar el contador de transacciones
+          function actualizarContador() {
+            const contadorElemento = document.getElementById("contador");
+            contadorElemento.textContent = ${cantidadOperaciones};
+          }
+
+          // Actualizar el contador al cargar la página
+          window.addEventListener("DOMContentLoaded", () => {
+            actualizarContador();
+          });
+        </script>
       </head>
       <body>
         <section>
           <h1>Transacciones TereBank</h1>
+          <p>Transacciones realizadas: <span id="contador"></span></p>
           <table>
             <tr>
               <th>Tipo de Operación</th>
