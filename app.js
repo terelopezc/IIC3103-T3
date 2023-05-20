@@ -11,6 +11,14 @@ let cantidadOperaciones2200 = 0;
 let cantidadOperaciones2400 = 0;
 let montoOperaciones2200 = 0;
 let montoOperaciones2400 = 0;
+let cantidadOperacionesMenor10000 = 0;
+let cantidadOperacionesEntre10000y49999 = 0;
+let cantidadOperacionesEntre50000y99999 = 0;
+let cantidadOperacionesEntre100000y499999 = 0;
+let cantidadOperacionesEntre500000y999999 = 0;
+let cantidadOperacionesEntre1000000y9999999 = 0;
+let cantidadOperacionesMayor9999999 = 0;
+
 const mensajes = [];
 const bancos = {};
 
@@ -61,6 +69,22 @@ function guardarMensajeEnArchivo(mensaje) {
     actualizarCuadraturaBancos(mensaje.bancoOrigen, Number(mensaje.monto));
     actualizarCuadraturaBancos(mensaje.bancoDestino, -Number(mensaje.monto));
   }
+  if (Number(mensaje.monto) < 10000) {
+    cantidadOperacionesMenor10000++;
+  } else if (Number(mensaje.monto) >= 10000 && Number(mensaje.monto) < 50000) {
+    cantidadOperacionesEntre10000y49999++;
+  } else if (Number(mensaje.monto) >= 50000 && Number(mensaje.monto) < 100000) {
+    cantidadOperacionesEntre50000y99999++;
+  } else if (Number(mensaje.monto) >= 100000 && Number(mensaje.monto) < 500000) {
+    cantidadOperacionesEntre100000y499999++;
+  } else if (Number(mensaje.monto) >= 500000 && Number(mensaje.monto) < 1000000) {
+    cantidadOperacionesEntre500000y999999++;
+  } else if (Number(mensaje.monto) >= 1000000 && Number(mensaje.monto) < 10000000) {
+    cantidadOperacionesEntre1000000y9999999++;
+  } else if (Number(mensaje.monto) >= 10000000) {
+    cantidadOperacionesMayor9999999++;
+  }
+  
 }
 
 function actualizarCuadraturaBancos(banco, monto) {
@@ -140,6 +164,7 @@ app.get("/", (req, res) => {
         <title>Transacciones TereBank</title>
         <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/chart.js@3.5.1/dist/chart.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@3.5.1/dist/chart.min.js"></script>
  
         <script>
           setTimeout(() => {
@@ -187,6 +212,11 @@ app.get("/", (req, res) => {
           th {
             background-color: #f2f2f2;
           }
+          canvas {
+            max-width: 400px; /* Ajusta el tamaño máximo del gráfico */
+            max-height: 400px; /* Establece la misma altura que el ancho */
+            margin: 0 auto;
+          }
         </style>
         <script>
           function actualizarContador() {
@@ -204,9 +234,66 @@ app.get("/", (req, res) => {
 
             const montoOperaciones2400Elemento = document.getElementById("montoOperaciones2400");
             montoOperaciones2400Elemento.textContent = ${calcularMontoOperaciones("2400")};
+
+            const contador0Elemento = document.getElementById("contador0");
+            contador0Elemento.textContent = ${cantidadOperacionesMenor10000};
+
+            const contador1Elemento = document.getElementById("contador1");
+            contador1Elemento.textContent = ${cantidadOperacionesEntre10000y49999};
+
+            const contador2Elemento = document.getElementById("contador2");
+            contador2Elemento.textContent = ${cantidadOperacionesEntre50000y99999};
+
+            const contador3Elemento = document.getElementById("contador3");
+            contador3Elemento.textContent = ${cantidadOperacionesEntre100000y499999};
+
+            const contador4Elemento = document.getElementById("contador4");
+            contador4Elemento.textContent = ${cantidadOperacionesEntre500000y999999};
+
+            const contador5Elemento = document.getElementById("contador5");
+            contador5Elemento.textContent = ${cantidadOperacionesEntre1000000y9999999};
+            
+            const contador6Elemento = document.getElementById("contador6");
+            contador6Elemento.textContent = ${cantidadOperacionesMayor9999999};
+
+            const ctx = document.getElementById("histograma").getContext("2d");
+
+            const histograma = new Chart(ctx, {
+              type: "bar",
+              data: {
+                labels: ["< $10,000", "$10,000 - $49,999", "$50,000 - $99,999", "$100,000 - $499,999", "$500,000 - $999,999", "$1,000,000 - $9,999,999", "> $9,999,999"],
+                datasets: [{
+                  label: "Cantidad de Operaciones",
+                  data: [
+                    ${cantidadOperacionesMenor10000},
+                    ${cantidadOperacionesEntre10000y49999},
+                    ${cantidadOperacionesEntre50000y99999},
+                    ${cantidadOperacionesEntre100000y499999},
+                    ${cantidadOperacionesEntre500000y999999},
+                    ${cantidadOperacionesEntre1000000y9999999},
+                    ${cantidadOperacionesMayor9999999}
+                  ],
+                  backgroundColor: "rgba(75, 192, 192, 0.2)",
+                  borderColor: "rgba(75, 192, 192, 1)",
+                  borderWidth: 1
+                }]
+              },
+              options: {
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    precision: 0,
+                    maxTicksLimit: 5
+                  }
+                },
+                responsive: true,
+                maintainAspectRatio: false
+              }
+            });
+
           }
           setInterval(actualizarContador, 1000);
-          }
+          
 
         </script>
       </head>
@@ -220,6 +307,16 @@ app.get("/", (req, res) => {
             <p>Total de operaciones tipo 2400: <span id="contador2400">${cantidadOperaciones2400}</span></p>
             <p>Monto operaciones tipo 2200: $<span id="montoOperaciones2200">${calcularMontoOperaciones("2200")}</span></p>
             <p>Monto operaciones tipo 2400: $<span id="montoOperaciones2400">${calcularMontoOperaciones("2400")}</span></p>
+            <p>Total de operaciones con monto menor a 10000: <span id="contador0">${cantidadOperacionesMenor10000}</span></p>
+            <p>Total de operaciones con monto entre $10000 y $49999: <span id="contador1">${cantidadOperacionesEntre10000y49999}</span></p>
+            <p>Total de operaciones con monto entre $50000 y $99999: <span id="contador2">${cantidadOperacionesEntre50000y99999}</span></p>
+            <p>Total de operaciones con monto entre $100000 y $499000: <span id="contador3">${cantidadOperacionesEntre100000y499999}</span></p>
+            <p>Total de operaciones con monto entre $500000 y $999999: <span id="contador4">${cantidadOperacionesEntre500000y999999}</span></p>
+            <p>Total de operaciones con monto entre $1000000 y $9999999: <span id="contador5">${cantidadOperacionesEntre1000000y9999999}</span></p>
+            <p>Total de operaciones con monto mayor a $9999999: <span id="contador6">${cantidadOperacionesMayor9999999}</span></p>
+
+            <canvas id="histograma"></canvas>
+            
           </section>
           <table>
             <tr>
@@ -247,8 +344,6 @@ app.get("/", (req, res) => {
           </table>
           <section>
           <section>
-          <h2>Histograma de Montos</h2>
-          <canvas id="histograma"></canvas>
         </section>
 
         </section>
@@ -269,5 +364,5 @@ function calcularMontoOperaciones(tipoOperacion) {
 }
 
 app.listen(port, () => {
-  console.log(`Servidor iniciado en el puerto ${port}`);
+  console.log(`Servidor escuchando en el puerto ${port}`);
 });
